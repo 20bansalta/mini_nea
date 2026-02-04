@@ -12,8 +12,8 @@ def entropy(y):
     Parameters
     ----------
     y : np.ndarray
-        Array of labelss
-    
+        Array of labels  
+
     Returns
     -------
     float
@@ -80,7 +80,7 @@ class LeafNode(NodeInterface):
 
     def __str__(self, depth=0):
         indent = " " * depth
-        return f"LeafNode(value={self.__value})"
+        return f"{indent}LeafNode(value={self.__value})"
 
     # Getters
     def get_value(self): return self.__value
@@ -121,17 +121,36 @@ class BestSplit:
 
 class DecisionTree:
     """
-    The class that stores Nodes and provide an interface for prediction.
+    An implementation of a decision tree which splits based on numerical thresholds.
     """
 
     def __init__(self, x, y, max_depth=None, min_gain=1e-7):
         self.__root = DecisionTree.__build(x, y, 0, max_depth, min_gain)
 
+    # =============== Public Interface =============== 
+    def predict(self, x):
+        """
+        Predict a label for each sample in the provided features.
+
+        Parameters
+        ----------
+        x : np.ndarray
+            2D Array of features 
+        
+        Returns
+        -------
+        np.ndarray
+            Array of predicted labels
+        """
+        return np.array([DecisionTree.__predict_helper(self.__root, xr) for xr in x])
+
+    
+    # =============== Private Methods =============== 
     @staticmethod
     def __best_split(x, y, min_gain):
         n_samples, n_features = x.shape
 
-        best = BestSplit()
+        best = BestSplit(min_gain)
         old_entropy = entropy(y)
 
         for feature in range(n_features):
@@ -156,7 +175,7 @@ class DecisionTree:
 
                 # The gain is just the reduction in entropy
                 gain = old_entropy - new_entropy
-                if gain > best['gain']:
+                if gain > best.gain:
                     best.feature  = feature
                     best.threshold = t
                     best.gain = gain
@@ -168,25 +187,25 @@ class DecisionTree:
     @staticmethod
     def __build(x, y, depth, max_depth, min_gain):
         # If we've gone to our maximum depth, or we've only got 1 remaining class
-        classes, counts = np.unique(y, return_counts=True)
-        if (max_depth is not None and depth >= max_depth) or len(classes) == 1:
+        labels, counts = np.unique(y, return_counts=True)
+        if (max_depth is not None and depth >= max_depth) or len(labels) == 1:
             # We use the highest count to choose our value at the end
-            return LeafNode(classes[np.argmax(counts)])
+            return LeafNode(labels[np.argmax(counts)])
         
         best = DecisionTree.__best_split(x, y, min_gain)
         # No useful splits
-        if best['gain'] == min_gain:
-            return LeafNode(classes[np.argmax(counts)])
+        if best.gain == min_gain:
+            return LeafNode(labels[np.argmax(counts)])
 
-        left_mask, right_mask = best['masks']
-        y_left, y_right = best['y_split']
+        left_mask, right_mask = best.masks
+        y_left, y_right = best.y_split
             
         left  = DecisionTree.__build(x[left_mask],  y_left,  depth + 1, max_depth, min_gain)
         right = DecisionTree.__build(x[right_mask], y_right, depth + 1, max_depth, min_gain)
 
         return DecisionNode(
-            best['feature'],
-            best['threshold'],
+            best.feature,
+            best.threshold,
             left,
             right
         )
@@ -194,25 +213,14 @@ class DecisionTree:
     @staticmethod
     def __predict_helper(node, x):
         if node.is_leaf():
-            return node.value
+            return node.get_value()
             
-        return DecisionTree._predict_helper(
-            node.get_left() if x[node.feature] <= node.get_threshold() else node.get_right(),
+        return DecisionTree.__predict_helper(
+            node.get_left() if x[node.get_feature()] <= node.get_threshold() else node.get_right(),
             x
         )
     
-    def predict(self, x):
-        """
-        Predicts labels for a given table of feature records
 
-        Parameters
-        ----------
-        x : np.ndarray
-            Table of feature records
-        
-        Returns
-        -------
-        np.ndarray
-            The predicted labels
-        """
-        return np.array([DecisionTree.__predict_helper(self.__root, xr) for xr in x])
+    # Getters
+    def get_root(self):
+        return self.__root
